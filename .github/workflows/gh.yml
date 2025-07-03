@@ -53,20 +53,23 @@ jobs:
           # Save output for future steps (optional)
           echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT
           
-      - name: Extract modified files into a list and print
-        run: |
-          echo "Extracting modified files..."
-          modified_files=()
+          # fetch from webhook payload
+          cat $GITHUB_EVENT_PATH | jq .
+          
+      # - name: Extract modified files into a list and print
+      #   run: |
+      #     echo "Extracting modified files..."
+      #     modified_files=()
 
-          # Read each modified file and append to the array
-          while IFS= read -r file; do
-            modified_files+=("$file")
-          done < <(cat "$GITHUB_EVENT_PATH" | jq -r '.commits[].modified[]')
+      #     # Read each modified file and append to the array
+      #     while IFS= read -r file; do
+      #       modified_files+=("$file")
+      #     done < <(cat "$GITHUB_EVENT_PATH" | jq -r '.commits[].modified[]')
 
-          echo "Modified files list:"
-          for file in "${modified_files[@]}"; do
-            echo " - $file"
-          done
+      #     echo "Modified files list:"
+      #     for file in "${modified_files[@]}"; do
+      #       echo " - $file"
+      #     done
 
       # - name: Extract commit SHAs and changed files into delta.txt
       #   run: |
