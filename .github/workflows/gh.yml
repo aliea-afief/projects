@@ -52,25 +52,40 @@ jobs:
 
           # Save output for future steps (optional)
           echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT
-
-      - name: Extract commit SHAs and changed files into delta.txt
-        run: |
-          echo "Commit SHAs and changed files:" > delta.txt
-          jq -c '.commits[] | {id: .id, added: .added, modified: .modified, removed: .removed}' $GITHUB_EVENT_PATH | while read commit; do
-            sha=$(echo "$commit" | jq -r '.id')
-            echo "Commit: $sha" >> delta.txt
-
-            echo "Added files:" >> delta.txt
-            echo "$commit" | jq -r '.added[]?' >> delta.txt
-
-            echo "Modified files:" >> delta.txt
-            echo "$commit" | jq -r '.modified[]?' >> delta.txt
-
-            echo "Removed files:" >> delta.txt
-            echo "$commit" | jq -r '.removed[]?' >> delta.txt
-
-            echo "-----" >> delta.txt
-          done
           
-      - name: Show delta.txt content
-        run: cat delta.txt
+      - name: Extract modified files into a list and print
+        run: |
+          echo "Extracting modified files..."
+          modified_files=()
+
+          # Read each modified file and append to the array
+          while IFS= read -r file; do
+            modified_files+=("$file")
+          done < <(cat "$GITHUB_EVENT_PATH" | jq -r '.commits[].modified[]')
+
+          echo "Modified files list:"
+          for file in "${modified_files[@]}"; do
+            echo " - $file"
+          done
+
+      # - name: Extract commit SHAs and changed files into delta.txt
+      #   run: |
+      #     echo "Commit SHAs and changed files:" > delta.txt
+      #     jq -c '.commits[] | {id: .id, added: .added, modified: .modified, removed: .removed}' $GITHUB_EVENT_PATH | while read commit; do
+      #       sha=$(echo "$commit" | jq -r '.id')
+      #       echo "Commit: $sha" >> delta.txt
+
+      #       echo "Added files:" >> delta.txt
+      #       echo "$commit" | jq -r '.added[]?' >> delta.txt
+
+      #       echo "Modified files:" >> delta.txt
+      #       echo "$commit" | jq -r '.modified[]?' >> delta.txt
+
+      #       echo "Removed files:" >> delta.txt
+      #       echo "$commit" | jq -r '.removed[]?' >> delta.txt
+
+      #       echo "-----" >> delta.txt
+      #     done
+          
+      # - name: Show delta.txt content
+      #   run: cat delta.txt
