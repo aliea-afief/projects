@@ -10,10 +10,12 @@ jobs:
   detect-files:
     runs-on: ubuntu-latest
     steps:
-      # - name: Set up GH CLI authentication
-      #   run: |
-      #     GITHUB_TOKEN=${{ secrets.API_TOKEN }}
-      #     echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+      - name: Set up GH CLI authentication
+        run: |
+          # GITHUB_TOKEN=${{ GH_TOKEN }}
+          # echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          echo GH_TOKEN | gh auth login --with-token
+
       - name: Detect changed files
         shell: bash
         env:
@@ -51,4 +53,3 @@ jobs:
 
           # Save output for future steps (optional)
           echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT
-          
