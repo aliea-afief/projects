@@ -12,9 +12,8 @@ jobs:
     steps:
       - name: Set up GH CLI authentication
         run: |
-          # GITHUB_TOKEN=${{ GH_TOKEN }}
-          # echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          echo GH_TOKEN | gh auth login --with-token
+          # GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Detect changed files
         shell: bash
