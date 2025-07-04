@@ -55,6 +55,12 @@ jobs:
           
           # fetch from webhook payload
           cat $GITHUB_EVENT_PATH | jq .
+
+      - name: Get commits between two SHAs
+        run: |
+          git fetch origin main
+          git log origin/main..HEAD --oneline
+          
           
       # - name: Extract modified files into a list and print
       #   run: |
