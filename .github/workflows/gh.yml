@@ -7,61 +7,90 @@ on:
     branches:
       [main]
 jobs:
-  detect-files:
+  compare-branches:
     runs-on: ubuntu-latest
     steps:
-      - name: Set up GH CLI authentication
-        run: |
-          # GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Get commit SHAs for push or pull_request
-        shell: bash
+      - name: Compare branchC...branchB using GitHub API
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PUSH_COMMITS: ${{ toJson(github.event.commits) }}
-          PUSH_AFTER: ${{ github.event.after }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
         run: |
-          commitShas=""
+          echo "Comparing $BASE...$HEAD"
+          
+          RESPONSE=$(curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://github.maybank.com/repos/${GITHUB_REPOSITORY}/compare/$BASE...$HEAD)
 
-          if [ "$EVENT_NAME" == "push" ]; then
-            # If it's a regular push with commits
-            commitShas=$(echo "$PUSH_COMMITS" | jq -r '.[].id')
-
-            # If it's a new branch (before is all zeroes) and no commits were listed
-            if [ -z "$commitShas" ] && [ "$PUSH_BEFORE" == "0000000000000000000000000000000000000000" ]; then
-              commitShas="$PUSH_AFTER"
-            fi
-          elif [ "$EVENT_NAME" == "pull_request" ]; then
-            # Fallback for pull_request
-            commitShas="$PULL_REQUEST_HEAD_SHA"
-          fi
+          echo "$RESPONSE" > compare.json
 
           echo "Commit SHAs:"
-          echo "$commitShas"
-          declare -A changedFiles
-          echo "Processing commits: $commitShas"
-          for sha in $commitShas; do
-            echo "Fetching commit: $sha"
-            commits=$(gh api \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "/repos/$REPO/commits/${sha}")
+          jq -r '.commits[].sha' compare.json
 
-            filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
+          echo "Commit Messages:"
+          jq -r '.commits[].commit.message' compare.json
+
+          echo "Changed Files:"
+          jq -r '.files[].filename' compare.json
+
+  # detect-files:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Set up GH CLI authentication
+  #       run: |
+  #         # GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+  #         echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+  #     - name: Get commit SHAs for push or pull_request
+  #       shell: bash
+  #       env:
+  #         EVENT_NAME: ${{ github.event_name }}
+  #         PUSH_COMMITS: ${{ toJson(github.event.commits) }}
+  #         PUSH_AFTER: ${{ github.event.after }}
+  #         PUSH_BEFORE: ${{ github.event.before }}
+  #         PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+  #       run: |
+  #         commitShas=""
+
+  #         if [ "$EVENT_NAME" == "push" ]; then
+  #           # If it's a regular push with commits
+  #           commitShas=$(echo "$PUSH_COMMITS" | jq -r '.[].id')
+
+  #           # If it's a new branch (before is all zeroes) and no commits were listed
+  #           if [ -z "$commitShas" ] && [ "$PUSH_BEFORE" == "0000000000000000000000000000000000000000" ]; then
+  #             commitShas="$PUSH_AFTER"
+  #           fi
+  #         elif [ "$EVENT_NAME" == "pull_request" ]; then
+  #           # Fallback for pull_request
+  #           commitShas="$PULL_REQUEST_HEAD_SHA"
+  #         fi
+
+  #         echo "Commit SHAs:"
+  #         echo "$commitShas"
+  #         declare -A changedFiles
+  #         echo "Processing commits: $commitShas"
+  #         for sha in $commitShas; do
+  #           echo "Fetching commit: $sha"
+  #           commits=$(gh api \
+  #             -H "Accept: application/vnd.github+json" \
+  #             -H "X-GitHub-Api-Version: 2022-11-28" \
+  #             "/repos/$REPO/commits/${sha}")
+
+  #           filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
             
-            for filename in $filenames; do
-              changedFiles["$filename"]=1
-            done
-          done
+  #           for filename in $filenames; do
+  #             changedFiles["$filename"]=1
+  #           done
+  #         done
 
-          echo ""
-          echo "✅ Unique Changed Files:"
-          for file in "${!changedFiles[@]}"; do
-            echo "$file"
-          done
+  #         echo ""
+  #         echo "✅ Unique Changed Files:"
+  #         for file in "${!changedFiles[@]}"; do
+  #           echo "$file"
+  #         done
 
       # - name: Get commit SHAs for push or pull_request event
       #   shell: bash
