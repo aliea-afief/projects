@@ -1,4 +1,4 @@
-name: Sparse Checkout Only Changed Files
+name: Detect Changed Files via gh api (No Checkout)
 on:
   push:
     branches:
@@ -7,54 +7,13 @@ on:
     branches:
       [main]
 jobs:
-# Detect Changed Files via gh api (No Checkout)
   detect-files:
-    runs-on: [RUNNER135]
+    runs-on: ubuntu-latest
     steps:
       - name: Set up GH CLI authentication
         run: |
           GITHUB_TOKEN=${{ secrets.API_TOKEN }}
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-      # - name: Detect changed files (PULL)
-      #   shell: bash
-      #   env:
-      #     REPO: ${{ github.repository }}
-      #     EVENT_NAME: ${{ github.event_name }}
-      #   run: |
-      #     # Get all commit SHAs from the event
-      #     commitShas="${{ join(github.event.commits.*.id, ' ') }}"
-          
-      #     # Fallback for pull_request (GitHub only sends HEAD SHA)
-      #     if [ -z "$commitShas" ] && [ "$EVENT_NAME" == "pull_request" ]; then
-      #       commitShas="${{ github.event.pull_request.head.sha }}"
-      #     fi
-
-      #     declare -A changedFiles
-
-      #     echo "Processing commits: $commitShas"
-
-      #     for sha in $commitShas; do
-      #       echo "Fetching commit: $sha"
-      #       commits=$(gh api \
-      #         -H "Accept: application/vnd.github+json" \
-      #         -H "X-GitHub-Api-Version: 2022-11-28" \
-      #         "/repos/$REPO/commits/${sha}")
-
-      #       filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
-            
-      #       for filename in $filenames; do
-      #         changedFiles["$filename"]=1
-      #       done
-      #     done
-
-      #     echo ""
-      #     echo "✅ Unique Changed Files:"
-      #     for file in "${!changedFiles[@]}"; do
-      #       echo "$file"
-      #     done
-
-      #     # Save output for future steps (optional)
-      #     echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT
           
       - name: Detect changed files (PUSH)
         shell: bash
@@ -96,178 +55,215 @@ jobs:
           # Save output for future steps (optional)
           echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT          
 
-
-      # - name: Create Changelog
-      #   id: changelog
-      #   uses: actions/github-script@v6.3.1
-      #   env:
-      #     COMMITS: ${{ toJSON(github.event.commits) }}
-      #   with:
-      #     result-encoding: string
-      #     script: |
-      #         const commits = JSON.parse(process.env.COMMITS);
-      #         var lines = "## What’s Changed\n\n";
-      #         for (const commit of commits) {
-      #           lines += "- " + commit.message + " (" + commit.id + ") @" + commit.author.username + "\n"
-      #         }
-      #         return lines
-
-  # sparse-checkout-job:
-  #   needs: detect-changes
-  #   if: needs.detect-changes.outputs.sparse_paths != ''
-  #   runs-on: [RUNNER135]
+  # compare-branches:
+  #   runs-on: ubuntu-latest
   #   steps:
-  #     - name: Checkout only changed Directories
-  #       uses: actions/checkout@v4
-  #       with: 
-  #         fetch-depth: 0
-  #         sparse-checkout: ${{ needs.detect-changes.outputs.sparse-paths }}
-  #         sparse-checkout-cone-mode: true
-      
-  #     - name: List of checked out files
+  #     - name: Compare branchC...branchB using GitHub API
+  #       env:
+  #         GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  #         OWNER: ${{ github.repository_owner }}
+  #         REPO: ${{ github.event.repository.name }}
+  #         BASE: ${{ github.base_ref }}
+  #         HEAD: ${{ github.head_ref }}
   #       run: |
-  #         echo "checked out directories: "
-  #         ls -1
+  #         echo "Comparing $BASE...$HEAD"
           
-# jobs:
-#   git-diff-job:
-#     runs-on: [RUNNER135]
-#     steps:
-#       - name: Minimal Git Checkout (no files)
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 2   # fetch enough history to compare current and previous commit
-#           sparse-checkout: |
-#             # nothing to checkout — just Git metadata
+  #         RESPONSE=$(curl -s \
+  #           -H "Authorization: Bearer $GH_TOKEN" \
+  #           -H "Accept: application/vnd.github+json" \
+  #           https://github.maybank.com/repos/${GITHUB_REPOSITORY}/compare/$BASE...$HEAD)
 
-#       - name: Get list of changed files using git diff
-#         id: git_diff
-#         run: |
-#           echo "Current commit: ${{ github.sha }}"
-#           PREV_SHA=$(git rev-parse HEAD^)
-#           echo "Previous commit: $PREV_SHA"
+  #         echo "$RESPONSE" > compare.json
 
-#           CHANGED_FILES=$(git diff --name-only $PREV_SHA ${{ github.sha }} | paste -sd "," -)
-#           echo "Changed files: $CHANGED_FILES"
-#           echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+  #         echo "Commit SHAs:"
+  #         jq -r '.commits[].sha' compare.json
 
-#       - name: Use the changed files
-#         run: |
-#           echo "These files changed: ${{ steps.git_diff.outputs.changed_files }}"
+  #         echo "Commit Messages:"
+  #         jq -r '.commits[].commit.message' compare.json
 
-  # Sparse-Checkout-Job:
-  #   runs-on: [RUNNER135]
+  #         echo "Changed Files:"
+  #         jq -r '.files[].filename' compare.json
+# we got to fetch changed files for PR with gh command, but not for push 
+# we can try the compare branch method to get commits (API)
+  # detect-files:
+  #   runs-on: ubuntu-latest
   #   steps:
-  #     - shell: bash
+  #     - name: Set up GH CLI authentication
   #       run: |
-  #         echo "Cleaning workspace directory..."
-  #         sudo rm -rfv ${{ github.workspace }}
-  #         mkdir -p ${{ github.workspace }}
+  #         # GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+  #         echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-  #     # - uses: actions/checkout@v4
-  #     #   with:
-  #     #     fetch-depth: 2
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         sparse-checkout: |
-  #           ARTEFACTS
-
-  #     - name: Collecting Changed Files
-  #       id: changed-files
-  #       uses: tj-actions/changed-files@v46.0.5
-
-  #     - name: List And Load All Changed Files
-  #       id: List-Load-Files
+  #     - name: Get commit SHAs for push or pull_request
+  #       shell: bash
+  #       env:
+  #         EVENT_NAME: ${{ github.event_name }}
+  #         PUSH_COMMITS: ${{ toJson(github.event.commits) }}
+  #         PUSH_AFTER: ${{ github.event.after }}
+  #         PUSH_BEFORE: ${{ github.event.before }}
+  #         PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
   #       run: |
-  #         # Cleanup /data/Gitbuild/${{ github.event.repository.name }} directory
-  #         cd /data/Gitbuild && rm -rf ${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }} && cd ${{ github.workspace }}
-  #         cd /data/Gitbuild && mkdir -p ${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }} && cd ${{ github.workspace }}
+  #         commitShas=""
 
-  #         echo "runner name: ${{ runner.name }}"
-  #         echo "run_number: ${{ github.run_number }}"
+  #         if [ "$EVENT_NAME" == "push" ]; then
+  #           # If it's a regular push with commits
+  #           commitShas=$(echo "$PUSH_COMMITS" | jq -r '.[].id')
 
-  #         # Generate delta-file
-  #         for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
-  #           echo "$file" >> /data/Gitbuild/${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }}/delta-file.txt
+  #           # If it's a new branch (before is all zeroes) and no commits were listed
+  #           if [ -z "$commitShas" ] && [ "$PUSH_BEFORE" == "0000000000000000000000000000000000000000" ]; then
+  #             commitShas="$PUSH_AFTER"
+  #           fi
+  #         elif [ "$EVENT_NAME" == "pull_request" ]; then
+  #           # Fallback for pull_request
+  #           commitShas="$PULL_REQUEST_HEAD_SHA"
+  #         fi
+
+  #         echo "Commit SHAs:"
+  #         echo "$commitShas"
+  #         declare -A changedFiles
+  #         echo "Processing commits: $commitShas"
+  #         for sha in $commitShas; do
+  #           echo "Fetching commit: $sha"
+  #           commits=$(gh api \
+  #             -H "Accept: application/vnd.github+json" \
+  #             -H "X-GitHub-Api-Version: 2022-11-28" \
+  #             "/repos/$REPO/commits/${sha}")
+
+  #           filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
+            
+  #           for filename in $filenames; do
+  #             changedFiles["$filename"]=1
+  #           done
   #         done
 
-  #         touch /data/Gitbuild/${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }}/delta-file.txt
-  #         echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  #         echo 'List of Changed Files:'
-  #         echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  #         awk '{print NR ": " $s}' /data/Gitbuild/${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }}/delta-file.txt
-  #         v_TotalChangedFiles=`cat /data/Gitbuild/${{ github.event.repository.name }}/${{ github.workflow }}/${{ github.run_number }}/${{ runner.name }}/delta-file.txt | wc -l`
-  #         echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  #         echo "Total Changed Files: " $v_TotalChangedFiles
-  #         echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  #         echo ""
+  #         echo "✅ Unique Changed Files:"
+  #         for file in "${!changedFiles[@]}"; do
+  #           echo "$file"
+  #         done
+
+      # - name: Get commit SHAs for push or pull_request event
+      #   shell: bash
+      #   env:
+      #     EVENT_NAME: ${{ github.event_name }}
+      #     PUSH_COMMITS: ${{ toJson(github.event.commits) }}
+      #     PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+      #   run: |
+      #     # Extract commit SHAs for push event
+      #     if [ "$EVENT_NAME" == "push" ]; then
+      #       # Parse commit SHAs from the JSON array PUSH_COMMITS
+      #       commitShas=$(echo "$PUSH_COMMITS" | jq -r '.[].id')
+      #     fi
+
+      #     # Fallback for pull_request event if no commits found from push (shouldn't happen here, but just in case)
+      #     if [ -z "$commitShas" ] && [ "$EVENT_NAME" == "pull_request" ]; then
+      #       commitShas="$PULL_REQUEST_HEAD_SHA"
+      #     fi
+
+      #     echo "Commit SHAs:"
+      #     echo "$commitShas"
+
+      #     declare -A changedFiles
+      #     echo "Processing commits: $commitShas"
+      #     for sha in $commitShas; do
+      #       echo "Fetching commit: $sha"
+      #       commits=$(gh api \
+      #         -H "Accept: application/vnd.github+json" \
+      #         -H "X-GitHub-Api-Version: 2022-11-28" \
+      #         "/repos/$REPO/commits/${sha}")
+
+      #       filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
+            
+      #       for filename in $filenames; do
+      #         changedFiles["$filename"]=1
+      #       done
+      #     done
+
+      #     echo ""
+      #     echo "✅ Unique Changed Files:"
+      #     for file in "${!changedFiles[@]}"; do
+      #       echo "$file"
+      #     done          
+          
+      # - name: Detect changed files
+      #   shell: bash
+      #   env:
+      #     REPO: ${{ github.repository }}
+      #     EVENT_NAME: ${{ github.event_name }}
+      #   run: |
+      #     # Get all commit SHAs from the event
+      #     commitShas="${{ join(github.event.commits.*.id, ' ') }}"
+          
+      #     # Fallback for pull_request (GitHub only sends HEAD SHA)
+      #     if [ -z "$commitShas" ] && [ "$EVENT_NAME" == "pull_request" ]; then
+      #       commitShas="${{ github.event.pull_request.head.sha }}"
+      #     fi
+      #     declare -A changedFiles
+      #     echo "Processing commits: $commitShas"
+      #     for sha in $commitShas; do
+      #       echo "Fetching commit: $sha"
+      #       commits=$(gh api \
+      #         -H "Accept: application/vnd.github+json" \
+      #         -H "X-GitHub-Api-Version: 2022-11-28" \
+      #         "/repos/$REPO/commits/${sha}")
+
+      #       filenames=$(jq -r '.files[] | select(.status == "modified" or .status == "added") | .filename' <<< "${commits}")
+            
+      #       for filename in $filenames; do
+      #         changedFiles["$filename"]=1
+      #       done
+      #     done
+
+      #     echo ""
+      #     echo "✅ Unique Changed Files:"
+      #     for file in "${!changedFiles[@]}"; do
+      #       echo "$file"
+      #     done
+
+      #     # Save output for future steps (optional)
+      #     echo "changed_files=${!changedFiles[@]}" >> $GITHUB_OUTPUT
+          
+      #     # fetch from webhook payload
+      #     cat $GITHUB_EVENT_PATH | jq .
+
+      # - name: Get commits between two SHAs
+      #   run: |
+      #     git fetch origin main
+      #     git log origin/main..HEAD --oneline
 
           
-  # sparse-checkout:
-  #   runs-on: [RUNNER135]
-
-  #   steps:
-  #     - name: Get changed files via GitHub API
-  #       id: changed
-  #       run: |
-  #         echo "Fetching changed files from GitHub API..."
-  #         # FILES=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-  #         #   https://api.github.com/repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }} \
-  #         #   | jq -r '.files[].filename')
-  #         # # Save the file list
-  #         # echo "$FILES" > changed-files.txt
-  #         # # Convert line breaks to space-separated list for later use
-  #         # echo "changed_files=$(echo $FILES | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
-
-  #         echo "Fetching changed files from GitHub API..."
-  #         # API_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/compare/${{ github.event.before }}...${{ github.sha }}"
-
-  #         API_URL="https://github.maybank.com/repos/${GITHUB_REPOSITORY}/compare/${{ github.event.before }}...${{ github.sha }}"
-  #         echo "Using URL: $API_URL"
-  #         GITHUB_TOKEN=${{ secrets.API_TOKEN }}
-
-  #         # Get list of changed filenames and write them to a file
-  #         curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" "$API_URL" \
-  #           | jq -r '.files[].filename' > changed-files.txt
-
-  #         echo "Changed files:"
-  #         cat changed-files.txt
-
-      # - name: Initialize empty git repo
+      # - name: Extract modified files into a list and print
       #   run: |
-      #     # git init
-      #     # git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.maybank.com/${{ github.repository }}
-      #     # git config core.sparseCheckout true
-      #     # mkdir -p .git/info
+      #     echo "Extracting modified files..."
+      #     modified_files=()
 
-      #     # # Use set-url so no error if remote exists
-      #     # git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.maybank.com/${{ github.repository }}.git
+      #     # Read each modified file and append to the array
+      #     while IFS= read -r file; do
+      #       modified_files+=("$file")
+      #     done < <(cat "$GITHUB_EVENT_PATH" | jq -r '.commits[].modified[]')
+
+      #     echo "Modified files list:"
+      #     for file in "${modified_files[@]}"; do
+      #       echo " - $file"
+      #     done
+
+      # - name: Extract commit SHAs and changed files into delta.txt
+      #   run: |
+      #     echo "Commit SHAs and changed files:" > delta.txt
+      #     jq -c '.commits[] | {id: .id, added: .added, modified: .modified, removed: .removed}' $GITHUB_EVENT_PATH | while read commit; do
+      #       sha=$(echo "$commit" | jq -r '.id')
+      #       echo "Commit: $sha" >> delta.txt
+
+      #       echo "Added files:" >> delta.txt
+      #       echo "$commit" | jq -r '.added[]?' >> delta.txt
+
+      #       echo "Modified files:" >> delta.txt
+      #       echo "$commit" | jq -r '.modified[]?' >> delta.txt
+
+      #       echo "Removed files:" >> delta.txt
+      #       echo "$commit" | jq -r '.removed[]?' >> delta.txt
+
+      #       echo "-----" >> delta.txt
+      #     done
           
-      #     # # Add Git remote if not exists
-      #     # if ! git remote | grep -q origin; then
-      #     #   git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.maybank.com/${{ github.repository }}
-      #     # fi
-      #     # git config core.sparseCheckout true
-      #     # mkdir -p .git/info
-
-      #     git init
-      #     git remote add origin https://github.com/${{ github.repository }}.git
-      #     git config core.sparseCheckout true
-      #     echo "app/" >> .git/info/sparse-checkout
-      #     git fetch --depth=1 origin ${{ github.ref }}
-      #     git checkout FETCH_HEAD
-      #     # List contents of checked-out directory
-      #     ls -R
-
-      # - name: Set sparse paths to only changed files
-      #   run: |
-      #     cat changed-files.txt >> .git/info/sparse-checkout
-
-      # - name: Sparse checkout only changed files
-      #   run: |
-      #     git pull origin ${{ github.ref_name }}
-
-      # - name: List downloaded files
-      #   run: |
-      #     echo "Downloaded only the following files:"
-      #     find . -type f
-      #     cat changed-files.txt
+      # - name: Show delta.txt content
+      #   run: cat delta.txt
